@@ -1,6 +1,17 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+type Business = {
+  id: number;
+  name: string;
+};
 
 type ChatMessage = {
   role: "user" | "bot";
@@ -9,14 +20,31 @@ type ChatMessage = {
 };
 
 export default function Home() {
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [businessId, setBusinessId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
-  const [businessId, setBusinessId] = useState(1); // Default to Business 1
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
+  // Fetch businesses on load
+  useEffect(() => {
+    const fetchBusinesses = async () => {
+      const { data, error } = await supabase
+        .from("businesses")
+        .select("id, name");
+
+      if (data) {
+        setBusinesses(data);
+        setBusinessId(data[0]?.id || null); // default to first business
+      }
+    };
+
+    fetchBusinesses();
+  }, []);
+
   const sendMessage = async () => {
-    if (!message.trim()) return;
+    if (!message.trim() || !businessId) return;
     setLoading(true);
 
     const userMsg: ChatMessage = {
@@ -53,7 +81,7 @@ export default function Home() {
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chat, loading]);
+  }, [chat]);
 
   return (
     <main className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
@@ -66,13 +94,15 @@ export default function Home() {
           </label>
           <select
             id="business"
-            value={businessId}
+            value={businessId ?? ""}
             onChange={(e) => setBusinessId(Number(e.target.value))}
             className="border border-gray-300 rounded px-2 py-1 text-gray-900"
           >
-            <option value={1}>Dental Clinic</option>
-            <option value={2}>Italian Restaurant</option>
-            <option value={3}>Real Estate Agency</option>
+            {businesses.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
           </select>
         </div>
 
