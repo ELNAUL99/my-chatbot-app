@@ -6,6 +6,17 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+export function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    },
+  });
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { message, businessId, sessionId } = await req.json();
@@ -93,12 +104,13 @@ export async function POST(req: NextRequest) {
       },
     ]);
 
-    return NextResponse.json({ reply });
-  } catch (err) {
-    console.error("Chat API error:", err);
     return NextResponse.json(
-      { reply: "Server error while processing your request." },
-      { status: 500 }
-    );
-  }
+    { reply },
+    {
+      status: 200,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+      },
+    }
+  );
 }
