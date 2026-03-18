@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-// Create Supabase client (server-side)
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -9,70 +8,96 @@ const supabase = createClient(
 
 export async function POST(req: NextRequest) {
   try {
-    const { message, businessId } = await req.json();
+    const { message, businessId, sessionId } = await req.json();
 
-    if (!message || !businessId) {
+    if (!message || !businessId || !sessionId) {
       return NextResponse.json(
-        { reply: "⚠️ Missing message or business ID." },
+        { reply: "Missing message, businessId, or sessionId." },
         { status: 400 }
       );
     }
 
-    // 1️⃣ Fetch the system prompt for this business
-    const { data: business, error } = await supabase
+    const { data: business, error: businessError } = await supabase
       .from("businesses")
       .select("system_prompt, is_active")
       .eq("id", businessId)
       .single();
 
-    if (error || !business) {
-      console.error("Supabase error:", error);
+    if (businessError || !business) {
       return NextResponse.json(
-        { reply: "⚠️ No system prompt found for this business." },
+        { reply: "This business does not exist or has no system prompt." },
         { status: 404 }
       );
     }
 
     if (!business.is_active) {
       return NextResponse.json(
-        { reply: "⚠️ This chatbot is currently inactive." },
+        { reply: "This chatbot is currently inactive." },
         { status: 403 }
       );
     }
 
-    // 2️⃣ Call Groq API with the dynamic system prompt
-    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+    const { data: history } = await supabase
+      .from("messages")
+      .select("role, content")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: true });
+
+    const conversation = [
+      { role: "system", content: business.system_prompt },
+      ...(history || []),
+      { role: "user", content: message },
+    ];
+
+    const groqRes = await fetch(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "meta-llama/llama-4-scout-17b-16e-instruct",
+          messages: conversation,
+          max_tokens: 300,
+          temperature: 0.7,
+          top_p: 1,
+          stream: false,
+        }),
+      }
+    );
+
+    const groqData = await groqRes.json();
+    const reply = groqData?.choices?.[0]?.message?.content?.trim();
+
+    if (!reply) {
+      return NextResponse.json(
+        { reply: "The AI returned no response." },
+        { status: 500 }
+      );
+    }
+
+    await supabase.from("messages").insert([
+      {
+        session_id: sessionId,
+        business_id: businessId,
+        role: "user",
+        content: message,
       },
-      body: JSON.stringify({
-        model: "meta-llama/llama-4-scout-17b-16e-instruct",
-        messages: [
-          { role: "system", content: business.system_prompt },
-          { role: "user", content: message },
-        ],
-        max_tokens: 300,
-        temperature: 0.7,
-        top_p: 1,
-        stream: false,
-      }),
-    });
+      {
+        session_id: sessionId,
+        business_id: businessId,
+        role: "assistant",
+        content: reply,
+      },
+    ]);
 
-    const data = await res.json();
-    console.log("Groq raw response:", JSON.stringify(data, null, 2));
-
-    // 3️⃣ Extract the reply
-    const reply = data?.choices?.[0]?.message?.content?.trim();
-
-    return NextResponse.json({
-      reply: reply || "⚠️ Model returned no text.",
-    });
-  } catch (error) {
-    console.error("API route error:", error);
+    return NextResponse.json({ reply });
+  } catch (err) {
+    console.error("Chat API error:", err);
     return NextResponse.json(
-      { reply: "⚠️ Error contacting AI service." },
+      { reply: "Server error while processing your request." },
       { status: 500 }
     );
   }
