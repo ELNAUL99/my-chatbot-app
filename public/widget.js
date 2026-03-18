@@ -7,7 +7,7 @@
   }
 
   // 2. Business ID from embed snippet
-  const BUSINESS_ID = window.CHATBOT_BUSINESS_ID || "default-business";
+  const BUSINESS_ID = window.CHATBOT_BUSINESS_ID || "80d0026a-a372-4748-9c07-09bdac2b5d51";
 
   // 3. Create chat bubble
   const bubble = document.createElement("div");
