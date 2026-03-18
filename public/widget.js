@@ -102,7 +102,7 @@
     input.value = "";
 
     try {
-      const response = await fetch("https://yourdomain.com/api/chat", {
+      const response = await fetch("https://my-chatbot-app-chi.vercel.app/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
