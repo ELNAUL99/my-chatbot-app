@@ -6,6 +6,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+// CORS preflight
 export function OPTIONS() {
   return new Response(null, {
     status: 204,
@@ -24,7 +25,10 @@ export async function POST(req: NextRequest) {
     if (!message || !businessId || !sessionId) {
       return NextResponse.json(
         { reply: "Missing message, businessId, or sessionId." },
-        { status: 400 }
+        {
+          status: 400,
+          headers: { "Access-Control-Allow-Origin": "*" },
+        }
       );
     }
 
@@ -37,14 +41,20 @@ export async function POST(req: NextRequest) {
     if (businessError || !business) {
       return NextResponse.json(
         { reply: "This business does not exist or has no system prompt." },
-        { status: 404 }
+        {
+          status: 404,
+          headers: { "Access-Control-Allow-Origin": "*" },
+        }
       );
     }
 
     if (!business.is_active) {
       return NextResponse.json(
         { reply: "This chatbot is currently inactive." },
-        { status: 403 }
+        {
+          status: 403,
+          headers: { "Access-Control-Allow-Origin": "*" },
+        }
       );
     }
 
@@ -85,7 +95,10 @@ export async function POST(req: NextRequest) {
     if (!reply) {
       return NextResponse.json(
         { reply: "The AI returned no response." },
-        { status: 500 }
+        {
+          status: 500,
+          headers: { "Access-Control-Allow-Origin": "*" },
+        }
       );
     }
 
@@ -105,12 +118,19 @@ export async function POST(req: NextRequest) {
     ]);
 
     return NextResponse.json(
-    { reply },
-    {
-      status: 200,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-      },
-    }
-  );
+      { reply },
+      {
+        status: 200,
+        headers: { "Access-Control-Allow-Origin": "*" },
+      }
+    );
+  } catch (error) {
+    return NextResponse.json(
+      { reply: "Server error." },
+      {
+        status: 500,
+        headers: { "Access-Control-Allow-Origin": "*" },
+      }
+    );
+  }
 }
