@@ -18,12 +18,12 @@ export default function ChatPreview() {
     setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
 
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("https://my-chatbot-app-chi.vercel.app/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: userMessage,
-          businessId: "pizzala-123", // or dynamic
+          businessId: "80d0026a-a372-4748-9c07-09bdac2b5d51", // or dynamic
           sessionId: "preview-session", // static for preview
         }),
       });
