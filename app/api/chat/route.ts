@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
 
     const { data: business, error: businessError } = await supabase
       .from("businesses")
-      .select("system_prompt, is_active")
+      .select("system_prompt, is_active, welcome_message")
       .eq("id", businessId)
       .single();
 
