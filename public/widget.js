@@ -124,9 +124,20 @@
   bubble.addEventListener("click", () => {
     const isOpening = chatWindow.style.display === "none";
 
-    if (isOpening && !hasShownWelcome && WELCOME_MESSAGE) {
+    if (isOpening) {
+    // Show chat window
+    chatWindow.style.display = "flex";
+    setTimeout(() => {
+      chatWindow.style.opacity = "1";
+      chatWindow.style.transform = "translateY(0)";
+    }, 10);
+
+    // Show welcome message once
+    if (!hasShownWelcome && WELCOME_MESSAGE) {
       addMessage("assistant", WELCOME_MESSAGE);
       hasShownWelcome = true;
+    }
+
     } else {
       chatWindow.style.opacity = "0";
       chatWindow.style.transform = "translateY(10px)";
