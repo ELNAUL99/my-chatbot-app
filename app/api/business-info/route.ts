@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
       },
       { status: 200, headers: corsHeaders }
     );
-  } catch (err) {
+  } catch (_err) {
     return NextResponse.json(
       { error: "Server error." },
       { status: 500, headers: corsHeaders }
