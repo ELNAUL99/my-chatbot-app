@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
         headers: { "Access-Control-Allow-Origin": "*" },
       }
     );
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { reply: "Server error." },
       {
