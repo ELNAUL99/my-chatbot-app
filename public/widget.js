@@ -16,9 +16,10 @@
   // -------------------------------
   // 3. Dynamic title + welcome message
   // -------------------------------
-  let CHAT_TITLE = "Chat Assistant";
-  let WELCOME_MESSAGE = "Hi! How can I help you today?";
-
+  // 3. Dynamic title + welcome message
+  let CHAT_TITLE = null;
+  let WELCOME_MESSAGE = null;
+  
   // Fetch business info (title + welcome message)
   (async () => {
     try {
@@ -27,20 +28,21 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ businessId: BUSINESS_ID })
       });
-
+  
       const data = await res.json();
-
-      if (data.title) CHAT_TITLE = data.title;
-      if (data.welcome_message) WELCOME_MESSAGE = data.welcome_message;
-
+  
+      CHAT_TITLE = data.title;               // Always from DB
+      WELCOME_MESSAGE = data.welcome_message; // Always from DB
+  
       // Update header title after fetch
       const header = document.getElementById("chat-header");
-      if (header) header.innerText = CHAT_TITLE;
-
+      if (header && CHAT_TITLE) header.innerText = CHAT_TITLE;
+  
     } catch (err) {
       console.warn("Failed to load business info");
     }
   })();
+
 
   // -------------------------------
   // 4. Create chat bubble
@@ -122,17 +124,9 @@
   bubble.addEventListener("click", () => {
     const isOpening = chatWindow.style.display === "none";
 
-    if (isOpening) {
-      chatWindow.style.display = "flex";
-      setTimeout(() => {
-        chatWindow.style.opacity = "1";
-        chatWindow.style.transform = "translateY(0)";
-      }, 10);
-
-      if (!hasShownWelcome) {
-        addMessage("assistant", WELCOME_MESSAGE);
-        hasShownWelcome = true;
-      }
+    if (isOpening && !hasShownWelcome && WELCOME_MESSAGE) {
+      addMessage("assistant", WELCOME_MESSAGE);
+      hasShownWelcome = true;
     } else {
       chatWindow.style.opacity = "0";
       chatWindow.style.transform = "translateY(10px)";
