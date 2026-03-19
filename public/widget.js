@@ -37,6 +37,11 @@
       // Update header title after fetch
       const header = document.getElementById("chat-header");
       if (header && CHAT_TITLE) header.innerText = CHAT_TITLE;
+      
+      if (chatWindow.style.display !== "none" && !hasShownWelcome && WELCOME_MESSAGE) {
+        addMessage("assistant", WELCOME_MESSAGE);
+        hasShownWelcome = true;
+      }
   
     } catch (err) {
       console.warn("Failed to load business info");
