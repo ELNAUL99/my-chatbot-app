@@ -16,7 +16,6 @@
   // -------------------------------
   // 3. Dynamic title + welcome message
   // -------------------------------
-  // 3. Dynamic title + welcome message
   let CHAT_TITLE = null;
   let WELCOME_MESSAGE = null;
   
