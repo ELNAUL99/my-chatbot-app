@@ -12,56 +12,44 @@
   // 2. Business ID from embed snippet
   // -------------------------------
   const BUSINESS_ID = window.CHATBOT_BUSINESS_ID;
+  if (!BUSINESS_ID) {
+    console.error("Chatbot Error: Missing window.CHATBOT_BUSINESS_ID");
+    return;
+  }
 
   // -------------------------------
-  // 3. Dynamic title + welcome message
+  // 3. Dynamic UI variables
   // -------------------------------
-  let CHAT_TITLE = null;
+  let CHAT_TITLE = "Chat Assistant";
   let WELCOME_MESSAGE = null;
-  
-  // Fetch business info (title + welcome message)
-  (async () => {
-    try {
-      const res = await fetch("https://my-chatbot-app-chi.vercel.app/api/business-info", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ businessId: BUSINESS_ID })
-      });
-  
-      const data = await res.json();
-  
-      CHAT_TITLE = data.title;               // Always from DB
-      WELCOME_MESSAGE = data.welcome_message; // Always from DB
-  
-      // Update header title after fetch
-      const header = document.getElementById("chat-header");
-      if (header && CHAT_TITLE) header.innerText = CHAT_TITLE;
-      
-      if (chatWindow.style.display !== "none" && !hasShownWelcome && WELCOME_MESSAGE) {
-        addMessage("assistant", WELCOME_MESSAGE);
-        hasShownWelcome = true;
-      }
-  
-    } catch (err) {
-      console.warn("Failed to load business info");
-    }
-  })();
 
+  let BUBBLE_ICON = "💬";
+  let BUBBLE_COLOR = "#1C64F2";
+  let BUBBLE_TEXT_COLOR = "#FFFFFF";
+
+  let HEADER_COLOR = "#1C64F2";
+  let HEADER_TEXT_COLOR = "#FFFFFF";
+
+  let THEME_PRIMARY = "#1C64F2";
+  let THEME_SECONDARY = "#0F3BB2";
+
+  let hasShownWelcome = false;
 
   // -------------------------------
   // 4. Create chat bubble
   // -------------------------------
   const bubble = document.createElement("div");
   bubble.id = "chat-bubble";
-  bubble.innerHTML = "💬";
+  bubble.innerHTML = BUBBLE_ICON;
+
   Object.assign(bubble.style, {
     position: "fixed",
     bottom: "20px",
     right: "20px",
     width: "60px",
     height: "60px",
-    background: "#1C64F2",
-    color: "#fff",
+    background: BUBBLE_COLOR,
+    color: BUBBLE_TEXT_COLOR,
     borderRadius: "50%",
     display: "flex",
     justifyContent: "center",
@@ -101,7 +89,7 @@
   });
 
   chatWindow.innerHTML = `
-    <div id="chat-header" style="background:#1C64F2;color:#fff;padding:16px;font-size:18px;font-weight:bold;">
+    <div id="chat-header" style="background:${HEADER_COLOR};color:${HEADER_TEXT_COLOR};padding:16px;font-size:18px;font-weight:bold;">
       ${CHAT_TITLE}
     </div>
 
@@ -112,7 +100,7 @@
       <input id="chat-input" type="text" placeholder="Type your message..."
         style="flex:1;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:14px;">
       <button id="chat-send"
-        style="padding:10px 16px;background:#1C64F2;color:#fff;border:none;border-radius:8px;cursor:pointer;">
+        style="padding:10px 16px;background:${THEME_PRIMARY};color:#fff;border:none;border-radius:8px;cursor:pointer;">
         Send
       </button>
     </div>
@@ -121,26 +109,72 @@
   document.body.appendChild(chatWindow);
 
   // -------------------------------
-  // 6. Toggle chat window + welcome message
+  // 6. Fetch business info (AFTER chatWindow exists)
   // -------------------------------
-  let hasShownWelcome = false;
+  (async () => {
+    try {
+      const res = await fetch("https://my-chatbot-app-chi.vercel.app/api/business-info", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId: BUSINESS_ID })
+      });
 
+      const data = await res.json();
+
+      // Apply dynamic values
+      CHAT_TITLE = data.title || CHAT_TITLE;
+      WELCOME_MESSAGE = data.welcome_message || null;
+
+      BUBBLE_ICON = data.bubble_icon || BUBBLE_ICON;
+      BUBBLE_COLOR = data.bubble_color || BUBBLE_COLOR;
+      BUBBLE_TEXT_COLOR = data.bubble_text_color || BUBBLE_TEXT_COLOR;
+
+      HEADER_COLOR = data.header_color || HEADER_COLOR;
+      HEADER_TEXT_COLOR = data.header_text_color || HEADER_TEXT_COLOR;
+
+      THEME_PRIMARY = data.theme_primary || THEME_PRIMARY;
+      THEME_SECONDARY = data.theme_secondary || THEME_SECONDARY;
+
+      // Apply UI updates
+      bubble.innerHTML = BUBBLE_ICON;
+      bubble.style.background = BUBBLE_COLOR;
+      bubble.style.color = BUBBLE_TEXT_COLOR;
+
+      const header = document.getElementById("chat-header");
+      header.innerText = CHAT_TITLE;
+      header.style.background = HEADER_COLOR;
+      header.style.color = HEADER_TEXT_COLOR;
+
+      document.getElementById("chat-send").style.background = THEME_PRIMARY;
+
+      // If chat is already open, show welcome message now
+      if (chatWindow.style.display !== "none" && !hasShownWelcome && WELCOME_MESSAGE) {
+        addMessage("assistant", WELCOME_MESSAGE);
+        hasShownWelcome = true;
+      }
+
+    } catch (err) {
+      console.warn("Failed to load business info");
+    }
+  })();
+
+  // -------------------------------
+  // 7. Toggle chat window
+  // -------------------------------
   bubble.addEventListener("click", () => {
     const isOpening = chatWindow.style.display === "none";
 
     if (isOpening) {
-    // Show chat window
-    chatWindow.style.display = "flex";
-    setTimeout(() => {
-      chatWindow.style.opacity = "1";
-      chatWindow.style.transform = "translateY(0)";
-    }, 10);
+      chatWindow.style.display = "flex";
+      setTimeout(() => {
+        chatWindow.style.opacity = "1";
+        chatWindow.style.transform = "translateY(0)";
+      }, 10);
 
-    // Show welcome message once
-    if (!hasShownWelcome && WELCOME_MESSAGE) {
-      addMessage("assistant", WELCOME_MESSAGE);
-      hasShownWelcome = true;
-    }
+      if (!hasShownWelcome && WELCOME_MESSAGE) {
+        addMessage("assistant", WELCOME_MESSAGE);
+        hasShownWelcome = true;
+      }
 
     } else {
       chatWindow.style.opacity = "0";
@@ -150,7 +184,7 @@
   });
 
   // -------------------------------
-  // 7. Add message to UI
+  // 8. Add message to UI
   // -------------------------------
   function addMessage(role, text) {
     const messages = document.getElementById("chat-messages");
@@ -160,7 +194,7 @@
 
     if (role === "user") {
       msg.style.textAlign = "right";
-      msg.innerHTML = `<div style="display:inline-block;background:#1C64F2;color:#fff;padding:8px 12px;border-radius:12px;">${text}</div>`;
+      msg.innerHTML = `<div style="display:inline-block;background:${THEME_PRIMARY};color:#fff;padding:8px 12px;border-radius:12px;">${text}</div>`;
     } else {
       msg.style.textAlign = "left";
       msg.innerHTML = `<div style="display:inline-block;background:#f1f1f1;color:#333;padding:8px 12px;border-radius:12px;">${text}</div>`;
@@ -171,7 +205,7 @@
   }
 
   // -------------------------------
-  // 8. Send message to backend
+  // 9. Send message to backend
   // -------------------------------
   async function sendMessage() {
     const input = document.getElementById("chat-input");
