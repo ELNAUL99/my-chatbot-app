@@ -77,6 +77,15 @@ export default function ChatPreview() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+          style="
+            flex:1;
+            padding:10px;
+            border:1px solid #ccc;
+            border-radius:8px;
+            font-size:14px;
+            background:#ffffff;
+            color:#000000;
+          "
         />
         <button
           onClick={sendMessage}
