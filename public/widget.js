@@ -1,15 +1,50 @@
 (function () {
+  // -------------------------------
   // 1. Session ID
+  // -------------------------------
   let sessionId = localStorage.getItem("chat_session");
   if (!sessionId) {
     sessionId = crypto.randomUUID();
     localStorage.setItem("chat_session", sessionId);
   }
 
+  // -------------------------------
   // 2. Business ID from embed snippet
+  // -------------------------------
   const BUSINESS_ID = window.CHATBOT_BUSINESS_ID || "80d0026a-a372-4748-9c07-09bdac2b5d51";
 
-  // 3. Create chat bubble
+  // -------------------------------
+  // 3. Dynamic title + welcome message
+  // -------------------------------
+  let CHAT_TITLE = "Chat Assistant";
+  let WELCOME_MESSAGE = "Hi! How can I help you today?";
+
+  // Fetch business info (title + welcome message)
+  (async () => {
+    try {
+      const res = await fetch("https://my-chatbot-app-chi.vercel.app/api/business-info", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessId: BUSINESS_ID })
+      });
+
+      const data = await res.json();
+
+      if (data.title) CHAT_TITLE = data.title;
+      if (data.welcome_message) WELCOME_MESSAGE = data.welcome_message;
+
+      // Update header title after fetch
+      const header = document.getElementById("chat-header");
+      if (header) header.innerText = CHAT_TITLE;
+
+    } catch (err) {
+      console.warn("Failed to load business info");
+    }
+  })();
+
+  // -------------------------------
+  // 4. Create chat bubble
+  // -------------------------------
   const bubble = document.createElement("div");
   bubble.id = "chat-bubble";
   bubble.innerHTML = "💬";
@@ -28,11 +63,18 @@
     cursor: "pointer",
     zIndex: "999999",
     fontSize: "28px",
-    boxShadow: "0 4px 12px rgba(0,0,0,0.2)"
+    boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+    transition: "transform 0.2s ease"
   });
+
+  bubble.onmouseenter = () => (bubble.style.transform = "scale(1.08)");
+  bubble.onmouseleave = () => (bubble.style.transform = "scale(1)");
+
   document.body.appendChild(bubble);
 
-  // 4. Create chat window
+  // -------------------------------
+  // 5. Create chat window
+  // -------------------------------
   const chatWindow = document.createElement("div");
   Object.assign(chatWindow.style, {
     position: "fixed",
@@ -46,12 +88,15 @@
     display: "none",
     flexDirection: "column",
     overflow: "hidden",
-    zIndex: "999999"
+    zIndex: "999999",
+    opacity: "0",
+    transform: "translateY(10px)",
+    transition: "opacity 0.25s ease, transform 0.25s ease"
   });
 
   chatWindow.innerHTML = `
-    <div style="background:#1C64F2;color:#fff;padding:16px;font-size:18px;font-weight:bold;">
-      Chat Assistant
+    <div id="chat-header" style="background:#1C64F2;color:#fff;padding:16px;font-size:18px;font-weight:bold;">
+      ${CHAT_TITLE}
     </div>
 
     <div id="chat-messages" style="flex:1;padding:12px;overflow-y:auto;font-family:sans-serif;font-size:15px;line-height:1.4;">
@@ -66,14 +111,38 @@
       </button>
     </div>
   `;
+
   document.body.appendChild(chatWindow);
 
-  // Toggle chat window
+  // -------------------------------
+  // 6. Toggle chat window + welcome message
+  // -------------------------------
+  let hasShownWelcome = false;
+
   bubble.addEventListener("click", () => {
-    chatWindow.style.display = chatWindow.style.display === "none" ? "flex" : "none";
+    const isOpening = chatWindow.style.display === "none";
+
+    if (isOpening) {
+      chatWindow.style.display = "flex";
+      setTimeout(() => {
+        chatWindow.style.opacity = "1";
+        chatWindow.style.transform = "translateY(0)";
+      }, 10);
+
+      if (!hasShownWelcome) {
+        addMessage("assistant", WELCOME_MESSAGE);
+        hasShownWelcome = true;
+      }
+    } else {
+      chatWindow.style.opacity = "0";
+      chatWindow.style.transform = "translateY(10px)";
+      setTimeout(() => (chatWindow.style.display = "none"), 200);
+    }
   });
 
-  // Add message to UI
+  // -------------------------------
+  // 7. Add message to UI
+  // -------------------------------
   function addMessage(role, text) {
     const messages = document.getElementById("chat-messages");
     const msg = document.createElement("div");
@@ -92,7 +161,9 @@
     messages.scrollTop = messages.scrollHeight;
   }
 
-  // Send message to backend
+  // -------------------------------
+  // 8. Send message to backend
+  // -------------------------------
   async function sendMessage() {
     const input = document.getElementById("chat-input");
     const text = input.value.trim();
