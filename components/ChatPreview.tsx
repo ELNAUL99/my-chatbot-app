@@ -2,8 +2,21 @@
 
 import { useEffect, useState } from "react";
 
+type BusinessInfo = {
+  title: string;
+  welcome_message: string | null;
+  system_prompt: string;
+  bubble_icon: string;
+  bubble_color: string;
+  bubble_text_color: string;
+  header_color: string;
+  header_text_color: string;
+  theme_primary: string;
+  theme_secondary: string;
+};
+
 export default function ChatPreview() {
-  const [business, setBusiness] = useState<any>(null);
+  const [business, setBusiness] = useState<BusinessInfo | null>(null);
   const [messages, setMessages] = useState<
     { role: "user" | "assistant"; content: string }[]
   >([]);
@@ -12,13 +25,16 @@ export default function ChatPreview() {
   // 1. Fetch business info for preview
   useEffect(() => {
     async function loadBusiness() {
-      const res = await fetch("https://my-chatbot-app-chi.vercel.app/api/business-info", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          businessId: "80d0026a-a372-4748-9c07-09bdac2b5d51",
-        }),
-      });
+      const res = await fetch(
+        "https://my-chatbot-app-chi.vercel.app/api/business-info",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            businessId: "80d0026a-a372-4748-9c07-09bdac2b5d51",
+          }),
+        }
+      );
 
       const data = await res.json();
       setBusiness(data);
@@ -49,15 +65,18 @@ export default function ChatPreview() {
     setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
 
     try {
-      const res = await fetch("https://my-chatbot-app-chi.vercel.app/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: userMessage,
-          businessId: "80d0026a-a372-4748-9c07-09bdac2b5d51",
-          sessionId: "preview-session",
-        }),
-      });
+      const res = await fetch(
+        "https://my-chatbot-app-chi.vercel.app/api/chat",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: userMessage,
+            businessId: "80d0026a-a372-4748-9c07-09bdac2b5d51",
+            sessionId: "preview-session",
+          }),
+        }
+      );
 
       const data = await res.json();
 
@@ -65,7 +84,7 @@ export default function ChatPreview() {
         ...prev,
         { role: "assistant", content: data.reply },
       ]);
-    } catch (err) {
+    } catch {
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: "Error contacting chatbot." },
@@ -96,7 +115,7 @@ export default function ChatPreview() {
             }`}
           >
             <div
-              className={`px-3 py-2 rounded-lg max-w-[80%] text-sm`}
+              className="px-3 py-2 rounded-lg max-w-[80%] text-sm"
               style={{
                 background:
                   m.role === "user"
