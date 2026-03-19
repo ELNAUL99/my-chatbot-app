@@ -11,7 +11,7 @@
   // -------------------------------
   // 2. Business ID from embed snippet
   // -------------------------------
-  const BUSINESS_ID = window.CHATBOT_BUSINESS_ID || "80d0026a-a372-4748-9c07-09bdac2b5d51";
+  const BUSINESS_ID = window.CHATBOT_BUSINESS_ID;
 
   // -------------------------------
   // 3. Dynamic title + welcome message
