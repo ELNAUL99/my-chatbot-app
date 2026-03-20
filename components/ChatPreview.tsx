@@ -72,7 +72,7 @@ export default function ChatPreview() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             message: userMessage,
-            businessId: "80d0026a-a372-4748-9c07-09bdac2b5d51",
+            businessId: "232211d5-85e0-413d-8dec-b0c0ec281cca",
             sessionId: "preview-session",
           }),
         }
