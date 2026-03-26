@@ -1,26 +1,24 @@
+import { NextRequest } from "next/server";
 import { google } from "googleapis";
 
-export async function POST(req) {
+export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { name, email, date, time, people } = body;
 
-    // Combine date + time into ISO format
     const startDateTime = new Date(`${date}T${time}:00`);
-    const endDateTime = new Date(startDateTime.getTime() + 90 * 60000); // 1.5h default
+    const endDateTime = new Date(startDateTime.getTime() + 90 * 60000);
 
-    // Authenticate with Google Service Account
     const auth = new google.auth.GoogleAuth({
       credentials: {
         client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-        private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+        private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
       },
       scopes: ["https://www.googleapis.com/auth/calendar"],
     });
 
     const calendar = google.calendar({ version: "v3", auth });
 
-    // Create event
     const event = {
       summary: `Reservation – ${name} (${people} people)`,
       description: `Customer email: ${email}`,
@@ -35,7 +33,7 @@ export async function POST(req) {
     };
 
     await calendar.events.insert({
-      calendarId: process.env.GOOGLE_CALENDAR_ID,
+      calendarId: process.env.GOOGLE_CALENDAR_ID!,
       resource: event,
     });
 
