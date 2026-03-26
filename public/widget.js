@@ -104,6 +104,16 @@
         Send
       </button>
     </div>
+    <div id="sisu-credit" style="
+    text-align:center;
+    font-size:11px;
+    color:#999;
+    padding:6px 0 10px;
+    font-family:sans-serif;
+    opacity:0.8;
+  ">
+    Powered by Sisu Assistant
+  </div>
   `;
 
   document.body.appendChild(chatWindow);
