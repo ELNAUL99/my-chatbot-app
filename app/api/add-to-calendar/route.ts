@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
 
     await calendar.events.insert({
       calendarId: process.env.GOOGLE_CALENDAR_ID!,
-      resource: event,
+      requestBody: event,
     });
 
     return new Response(JSON.stringify({ success: true }), { status: 200 });
