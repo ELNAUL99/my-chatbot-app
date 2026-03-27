@@ -42,16 +42,28 @@ export async function POST(req: NextRequest) {
     });
 
     // -------------------------------
-    // ⭐ FIXED TIME HANDLING (LOCAL TIME)
+    // ⭐ FIXED TIME HANDLING (NO UTC CONVERSION)
     // -------------------------------
     const [year, month, day] = date.split("-").map(Number);
     const [hour, minute] = time.split(":").map(Number);
 
-    const startDateTime = new Date(year, month - 1, day, hour, minute);
-    const endDateTime = new Date(startDateTime.getTime() + 90 * 60000);
+    // Start time (local)
+    const startDate = new Date(year, month - 1, day, hour, minute);
 
-    console.log("Start:", startDateTime.toISOString());
-    console.log("End:", endDateTime.toISOString());
+    // End time (local) — +90 minutes
+    const endDate = new Date(startDate.getTime() + 90 * 60000);
+
+    // Format as RFC3339 WITHOUT converting to UTC
+    const startDateTimeString =
+      `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T` +
+      `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`;
+
+    const endDateTimeString =
+      `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}-${String(endDate.getDate()).padStart(2, "0")}T` +
+      `${String(endDate.getHours()).padStart(2, "0")}:${String(endDate.getMinutes()).padStart(2, "0")}:00`;
+
+    console.log("Start (local):", startDateTimeString);
+    console.log("End (local):", endDateTimeString);
 
     // Google Auth
     const auth = new google.auth.GoogleAuth({
@@ -68,11 +80,11 @@ export async function POST(req: NextRequest) {
       summary: `Reservation – ${name} (${people} people)`,
       description: `Customer email: ${email}\nRestaurant: ${restaurant}`,
       start: {
-        dateTime: startDateTime.toISOString(),
+        dateTime: startDateTimeString,
         timeZone: "Europe/Helsinki",
       },
       end: {
-        dateTime: endDateTime.toISOString(),
+        dateTime: endDateTimeString,
         timeZone: "Europe/Helsinki",
       },
     };
