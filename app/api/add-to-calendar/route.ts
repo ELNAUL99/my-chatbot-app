@@ -7,6 +7,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
+// Map restaurant → calendar ID
+const CALENDARS: Record<string, string | undefined> = {
+  pizza: process.env.CALENDAR_PIZZA,
+};
+
 export async function OPTIONS() {
   return new Response(null, { status: 204, headers: corsHeaders });
 }
@@ -18,17 +23,37 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     console.log("Received body:", body);
 
-    const { name, email, date, time, people } = body;
+    const { restaurant, name, email, date, time, people } = body;
+
+    const calendarId = CALENDARS[restaurant];
+    if (!calendarId) {
+      console.error("Unknown restaurant:", restaurant);
+      return new Response(
+        JSON.stringify({ error: "Unknown restaurant" }),
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    console.log("Using calendar:", calendarId);
 
     console.log("ENV CHECK:", {
       serviceEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
       keyLoaded: !!process.env.GOOGLE_PRIVATE_KEY,
-      calendarId: process.env.GOOGLE_CALENDAR_ID
     });
 
-    const startDateTime = new Date(`${date}T${time}:00`);
+    // -------------------------------
+    // ⭐ FIXED TIME HANDLING (LOCAL TIME)
+    // -------------------------------
+    const [year, month, day] = date.split("-").map(Number);
+    const [hour, minute] = time.split(":").map(Number);
+
+    const startDateTime = new Date(year, month - 1, day, hour, minute);
     const endDateTime = new Date(startDateTime.getTime() + 90 * 60000);
 
+    console.log("Start:", startDateTime.toISOString());
+    console.log("End:", endDateTime.toISOString());
+
+    // Google Auth
     const auth = new google.auth.GoogleAuth({
       credentials: {
         client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
@@ -41,7 +66,7 @@ export async function POST(req: NextRequest) {
 
     const event = {
       summary: `Reservation – ${name} (${people} people)`,
-      description: `Customer email: ${email}`,
+      description: `Customer email: ${email}\nRestaurant: ${restaurant}`,
       start: {
         dateTime: startDateTime.toISOString(),
         timeZone: "Europe/Helsinki",
@@ -53,7 +78,7 @@ export async function POST(req: NextRequest) {
     };
 
     await calendar.events.insert({
-      calendarId: process.env.GOOGLE_CALENDAR_ID!,
+      calendarId,
       requestBody: event,
     });
 
