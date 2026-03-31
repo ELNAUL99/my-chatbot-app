@@ -25,39 +25,32 @@ export async function POST(req: NextRequest) {
     if (!message || !businessId || !sessionId) {
       return NextResponse.json(
         { reply: "Missing message, businessId, or sessionId." },
-        {
-          status: 400,
-          headers: { "Access-Control-Allow-Origin": "*" },
-        }
+        { status: 400, headers: { "Access-Control-Allow-Origin": "*" } }
       );
     }
 
-    const { data: business, error: businessError } = await supabase
+    // 1. Load business settings
+    const { data: business } = await supabase
       .from("businesses")
       .select("system_prompt, is_active, welcome_message")
       .eq("id", businessId)
       .single();
 
-    if (businessError || !business) {
+    if (!business) {
       return NextResponse.json(
         { reply: "This business does not exist or has no system prompt." },
-        {
-          status: 404,
-          headers: { "Access-Control-Allow-Origin": "*" },
-        }
+        { status: 404, headers: { "Access-Control-Allow-Origin": "*" } }
       );
     }
 
     if (!business.is_active) {
       return NextResponse.json(
         { reply: "This chatbot is currently inactive." },
-        {
-          status: 403,
-          headers: { "Access-Control-Allow-Origin": "*" },
-        }
+        { status: 403, headers: { "Access-Control-Allow-Origin": "*" } }
       );
     }
 
+    // 2. Load chat history
     const { data: history } = await supabase
       .from("messages")
       .select("role, content")
@@ -70,7 +63,8 @@ export async function POST(req: NextRequest) {
       { role: "user", content: message },
     ];
 
-    const groqRes = await fetch(
+    // 3. First model call — let Groq decide if it wants to use search
+    const firstRes = await fetch(
       "https://api.groq.com/openai/v1/chat/completions",
       {
         method: "POST",
@@ -81,56 +75,117 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({
           model: "meta-llama/llama-4-scout-17b-16e-instruct",
           messages: conversation,
+          tools: [
+            {
+              type: "function",
+              function: {
+                name: "searchWeb",
+                description: "Search the web for real-time information",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    query: { type: "string" },
+                  },
+                  required: ["query"],
+                },
+              },
+            },
+          ],
+          tool_choice: "auto",
           max_tokens: 300,
           temperature: 0.7,
-          top_p: 1,
-          stream: false,
         }),
       }
     );
 
-    const groqData = await groqRes.json();
-    const reply = groqData?.choices?.[0]?.message?.content?.trim();
+    const firstData = await firstRes.json();
+    const firstChoice = firstData?.choices?.[0];
+    const toolCalls = firstChoice?.message?.tool_calls;
 
-    if (!reply) {
+    // 4. If no tool call → normal reply
+    if (!toolCalls || toolCalls.length === 0) {
+      const reply = firstChoice?.message?.content?.trim() || "No response.";
+
+      await supabase.from("messages").insert([
+        { session_id: sessionId, business_id: businessId, role: "user", content: message },
+        { session_id: sessionId, business_id: businessId, role: "assistant", content: reply },
+      ]);
+
       return NextResponse.json(
-        { reply: "The AI returned no response." },
-        {
-          status: 500,
-          headers: { "Access-Control-Allow-Origin": "*" },
-        }
+        { reply },
+        { status: 200, headers: { "Access-Control-Allow-Origin": "*" } }
       );
     }
 
-    await supabase.from("messages").insert([
-      {
-        session_id: sessionId,
-        business_id: businessId,
-        role: "user",
-        content: message,
-      },
-      {
-        session_id: sessionId,
-        business_id: businessId,
-        role: "assistant",
-        content: reply,
-      },
-    ]);
+    // 5. Tool call detected → perform web search
+    const toolCall = toolCalls[0];
+    const args = JSON.parse(toolCall.function.arguments);
+    const query = args.query;
 
-    return NextResponse.json(
-      { reply },
+    const searchRes = await fetch(`${process.env.NEXT_PUBLIC_URL}/api/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
+
+    const searchData = await searchRes.json();
+
+    // Log search into messages table
+    await supabase.from("messages").insert({
+      session_id: sessionId,
+      business_id: businessId,
+      role: "assistant",
+      content: "(search executed)",
+      search_query: query,
+      search_result: searchData,
+    });
+
+    // 6. Second model call — give search results back to Groq
+    const secondRes = await fetch(
+      "https://api.groq.com/openai/v1/chat/completions",
       {
-        status: 200,
-        headers: { "Access-Control-Allow-Origin": "*" },
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "meta-llama/llama-4-scout-17b-16e-instruct",
+          messages: [
+            ...conversation,
+            firstChoice.message,
+            {
+              role: "tool",
+              name: "searchWeb",
+              content: JSON.stringify(searchData),
+            },
+          ],
+          max_tokens: 300,
+          temperature: 0.7,
+        }),
       }
     );
-  } catch (_error) {
+
+    const secondData = await secondRes.json();
+    const finalReply = secondData?.choices?.[0]?.message?.content?.trim() || "No response.";
+
+    // 7. Save final assistant reply
+    await supabase.from("messages").insert({
+      session_id: sessionId,
+      business_id: businessId,
+      role: "assistant",
+      content: finalReply,
+    });
+
+    return NextResponse.json(
+      { reply: finalReply },
+      { status: 200, headers: { "Access-Control-Allow-Origin": "*" } }
+    );
+  } catch (err) {
+    console.error("Chat error:", err);
     return NextResponse.json(
       { reply: "Server error." },
-      {
-        status: 500,
-        headers: { "Access-Control-Allow-Origin": "*" },
-      }
+      { status: 500, headers: { "Access-Control-Allow-Origin": "*" } }
     );
   }
 }
