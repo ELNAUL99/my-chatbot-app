@@ -185,7 +185,7 @@ export async function POST(req: NextRequest) {
     };
 
     if (stream) {
-      await supabase.from("messages").insert([
+      const { error: userMsgError } = await supabase.from("messages").insert([
         {
           session_id: sessionId,
           business_id: businessId,
@@ -194,24 +194,35 @@ export async function POST(req: NextRequest) {
         },
       ]);
 
-      if (useWebSearch) {
-        const agentReply = await runGroqWithWebSearch(conversation, {
-          model: CHAT_MODEL,
-          apiKey: groqKey!,
-          maxTokens: MAX_TOKENS_WITH_SEARCH,
-        });
+      if (userMsgError) {
+        return NextResponse.json(
+          { reply: "Failed to save message." },
+          { status: 500, headers: corsHeaders }
+        );
+      }
 
-        if (agentReply) {
-          return ndjsonTextStreamResponse(agentReply, corsHeaders, async () => {
-            await supabase.from("messages").insert([
-              {
-                session_id: sessionId,
-                business_id: businessId,
-                role: "assistant",
-                content: agentReply.trim(),
-              },
-            ]);
+      if (useWebSearch) {
+        try {
+          const agentReply = await runGroqWithWebSearch(conversation, {
+            model: CHAT_MODEL,
+            apiKey: groqKey!,
+            maxTokens: MAX_TOKENS_WITH_SEARCH,
           });
+
+          if (agentReply) {
+            return ndjsonTextStreamResponse(agentReply, corsHeaders, async () => {
+              await supabase.from("messages").insert([
+                {
+                  session_id: sessionId,
+                  business_id: businessId,
+                  role: "assistant",
+                  content: agentReply.trim(),
+                },
+              ]);
+            });
+          }
+        } catch (error) {
+          console.error("Web search failed:", error);
         }
       }
 
