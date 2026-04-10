@@ -1,51 +1,92 @@
 import { NextRequest } from "next/server";
 import { google } from "googleapis";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+// --- CORS CONFIG ---
+const getAllowedOrigins = (): string[] => {
+  const envOrigins = process.env.ALLOWED_ORIGINS;
+  if (envOrigins) {
+    return envOrigins.split(",").map(o => o.trim()).filter(Boolean);
+  }
+  return ["https://my-chatbot-app-chi.vercel.app"];
 };
+
+const ALLOWED_ORIGINS = getAllowedOrigins();
+
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  // Check if the origin is allowed
+  const isAllowed = origin && ALLOWED_ORIGINS.includes(origin);
+  
+  // only return the allowed origin if it matches
+  // Otherwise return the first allowed origin (prevents information leakage)
+  return {
+    "Access-Control-Allow-Origin": isAllowed ? origin! : ALLOWED_ORIGINS[0],
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+  };
+}
 
 // Map restaurant → calendar ID
 const CALENDARS: Record<string, string | undefined> = {
   pizza: process.env.CALENDAR_PIZZA,
 };
 
-export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: corsHeaders });
+export async function OPTIONS(req: NextRequest) {
+  const origin = req.headers.get("origin");
+  return new Response(null, { status: 204, headers: getCorsHeaders(origin) });
 }
 
 export async function POST(req: NextRequest) {
+  const origin = req.headers.get("origin");
+  const corsHeaders = getCorsHeaders(origin);
+
   try {
-    console.log("📩 Calendar API hit");
+    const { restaurant, name, email, date, time, people } = await req.json();
 
-    const body = await req.json();
-    console.log("Received body:", body);
-
-    const { restaurant, name, email, date, time, people } = body;
+    // Validate required fields
+    if (!restaurant || !name || !email || !date || !time || !people) {
+      return new Response(
+        JSON.stringify({ error: "Missing required fields" }),
+        { status: 400, headers: corsHeaders }
+      );
+    }
 
     const calendarId = CALENDARS[restaurant];
     if (!calendarId) {
-      console.error("Unknown restaurant:", restaurant);
       return new Response(
         JSON.stringify({ error: "Unknown restaurant" }),
         { status: 400, headers: corsHeaders }
       );
     }
 
-    console.log("Using calendar:", calendarId);
+    // Validate date format (YYYY-MM-DD)
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(date)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid date format. Use YYYY-MM-DD" }),
+        { status: 400, headers: corsHeaders }
+      );
+    }
 
-    console.log("ENV CHECK:", {
-      serviceEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      keyLoaded: !!process.env.GOOGLE_PRIVATE_KEY,
-    });
+    // Validate time format (HH:MM)
+    const timeRegex = /^\d{2}:\d{2}$/;
+    if (!timeRegex.test(time)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid time format. Use HH:MM" }),
+        { status: 400, headers: corsHeaders }
+      );
+    }
 
-    // -------------------------------
-    // ⭐ FIXED TIME HANDLING (NO UTC CONVERSION)
-    // -------------------------------
+    // Parse date and time
     const [year, month, day] = date.split("-").map(Number);
     const [hour, minute] = time.split(":").map(Number);
+
+    // Validate date components
+    if (month < 1 || month > 12 || day < 1 || day > 31 || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+      return new Response(
+        JSON.stringify({ error: "Invalid date or time values" }),
+        { status: 400, headers: corsHeaders }
+      );
+    }
 
     // Start time (local)
     const startDate = new Date(year, month - 1, day, hour, minute);
@@ -61,9 +102,6 @@ export async function POST(req: NextRequest) {
     const endDateTimeString =
       `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}-${String(endDate.getDate()).padStart(2, "0")}T` +
       `${String(endDate.getHours()).padStart(2, "0")}:${String(endDate.getMinutes()).padStart(2, "0")}:00`;
-
-    console.log("Start (local):", startDateTimeString);
-    console.log("End (local):", endDateTimeString);
 
     // Google Auth
     const auth = new google.auth.GoogleAuth({
@@ -94,15 +132,15 @@ export async function POST(req: NextRequest) {
       requestBody: event,
     });
 
-    console.log("✅ Event inserted successfully");
-
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: corsHeaders,
     });
 
   } catch (error) {
-    console.error("❌ Calendar error:", error);
+    // Log error internally (don't expose details to client)
+    console.error("Calendar API error:", error);
+    
     return new Response(JSON.stringify({ error: "Failed to add event" }), {
       status: 500,
       headers: corsHeaders,
