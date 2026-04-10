@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { google } from "googleapis";
+import { z } from "zod";
 
 // --- CORS CONFIG ---
 const getAllowedOrigins = (): string[] => {
@@ -11,6 +12,14 @@ const getAllowedOrigins = (): string[] => {
 };
 
 const ALLOWED_ORIGINS = getAllowedOrigins();
+const calendarRequestSchema = z.object({
+  restaurant: z.string().trim().min(1),
+  name: z.string().trim().min(1),
+  email: z.string().trim().email(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  time: z.string().regex(/^\d{2}:\d{2}$/),
+  people: z.coerce.number().int().min(1).max(50),
+});
 
 function isOriginAllowed(origin: string | null): boolean {
   return !origin || ALLOWED_ORIGINS.includes(origin);
@@ -54,38 +63,19 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { restaurant, name, email, date, time, people } = await req.json();
-
-    // Validate required fields
-    if (!restaurant || !name || !email || !date || !time || !people) {
+    const parsed = calendarRequestSchema.safeParse(await req.json());
+    if (!parsed.success) {
       return new Response(
-        JSON.stringify({ error: "Missing required fields" }),
+        JSON.stringify({ error: "Invalid request payload" }),
         { status: 400, headers: corsHeaders }
       );
     }
+    const { restaurant, name, email, date, time, people } = parsed.data;
 
     const calendarId = CALENDARS[restaurant];
     if (!calendarId) {
       return new Response(
         JSON.stringify({ error: "Unknown restaurant" }),
-        { status: 400, headers: corsHeaders }
-      );
-    }
-
-    // Validate date format (YYYY-MM-DD)
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(date)) {
-      return new Response(
-        JSON.stringify({ error: "Invalid date format. Use YYYY-MM-DD" }),
-        { status: 400, headers: corsHeaders }
-      );
-    }
-
-    // Validate time format (HH:MM)
-    const timeRegex = /^\d{2}:\d{2}$/;
-    if (!timeRegex.test(time)) {
-      return new Response(
-        JSON.stringify({ error: "Invalid time format. Use HH:MM" }),
         { status: 400, headers: corsHeaders }
       );
     }

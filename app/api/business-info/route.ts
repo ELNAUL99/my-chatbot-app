@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { z } from "zod";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,6 +19,9 @@ const getAllowedOrigins = (): string[] => {
 };
 
 const ALLOWED_ORIGINS = getAllowedOrigins();
+const businessInfoRequestSchema = z.object({
+  businessId: z.string().uuid(),
+});
 
 function isOriginAllowed(origin: string | null): boolean {
   return !origin || ALLOWED_ORIGINS.includes(origin);
@@ -61,14 +65,14 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { businessId } = await req.json();
-
-    if (!businessId) {
+    const parsed = businessInfoRequestSchema.safeParse(await req.json());
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: "Missing businessId." },
+        { error: "Invalid request payload." },
         { status: 400, headers: corsHeaders }
       );
     }
+    const { businessId } = parsed.data;
 
     const { data, error } = await supabase
       .from("businesses")
@@ -110,7 +114,7 @@ export async function POST(req: NextRequest) {
       },
       { status: 200, headers: corsHeaders }
     );
-  } catch (_err) {
+  } catch {
     return NextResponse.json(
       { error: "Server error." },
       { status: 500, headers: corsHeaders }

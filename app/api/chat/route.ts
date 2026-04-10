@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { z } from "zod";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,6 +19,11 @@ const getAllowedOrigins = (): string[] => {
 };
 
 const ALLOWED_ORIGINS = getAllowedOrigins();
+const chatRequestSchema = z.object({
+  message: z.string().trim().min(1),
+  businessId: z.string().uuid(),
+  sessionId: z.string().trim().min(1).max(200),
+});
 
 function isOriginAllowed(origin: string | null): boolean {
   return !origin || ALLOWED_ORIGINS.includes(origin);
@@ -64,14 +70,14 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { message, businessId, sessionId } = await req.json();
-
-    if (!message || !businessId || !sessionId) {
+    const parsed = chatRequestSchema.safeParse(await req.json());
+    if (!parsed.success) {
       return NextResponse.json(
-        { reply: "Missing message, businessId, or sessionId." },
+        { reply: "Invalid request payload." },
         { status: 400, headers: corsHeaders }
       );
     }
+    const { message, businessId, sessionId } = parsed.data;
 
     const { data: business, error: businessError } = await supabase
       .from("businesses")
@@ -97,6 +103,7 @@ export async function POST(req: NextRequest) {
       .from("messages")
       .select("role, content")
       .eq("session_id", sessionId)
+      .eq("business_id", businessId)
       .order("created_at", { ascending: true });
 
     const conversation = [
@@ -153,7 +160,7 @@ export async function POST(req: NextRequest) {
       { reply },
       { status: 200, headers: corsHeaders }
     );
-  } catch (_error) {
+  } catch {
     return NextResponse.json(
       { reply: "Server error." },
       { status: 500, headers: corsHeaders }
