@@ -21,6 +21,29 @@ describe("widget behavior", () => {
   });
 
   it("renders messages as text instead of HTML", async () => {
+    const enc = new TextEncoder();
+    const ndjsonBody = new ReadableStream({
+      start(controller) {
+        controller.enqueue(
+          enc.encode(
+            JSON.stringify({
+              type: "token",
+              v: "<img src=x onerror=alert('xss') />",
+            }) + "\n"
+          )
+        );
+        controller.enqueue(
+          enc.encode(
+            JSON.stringify({
+              type: "done",
+              reply: "<img src=x onerror=alert('xss') />",
+            }) + "\n"
+          )
+        );
+        controller.close();
+      },
+    });
+
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -33,12 +56,10 @@ describe("widget behavior", () => {
         )
       )
       .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            reply: "<img src=x onerror=alert('xss') />",
-          }),
-          { status: 200, headers: { "content-type": "application/json" } }
-        )
+        new Response(ndjsonBody, {
+          status: 200,
+          headers: { "content-type": "application/x-ndjson" },
+        })
       );
 
     vi.stubGlobal("fetch", fetchMock);

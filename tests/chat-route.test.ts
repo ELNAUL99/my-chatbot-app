@@ -53,6 +53,7 @@ describe("chat route", () => {
   beforeEach(() => {
     state.messagesEqCalls = [];
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("rejects disallowed origins", async () => {
@@ -116,5 +117,57 @@ describe("chat route", () => {
       column: "business_id",
       value: "232211d5-85e0-413d-8dec-b0c0ec281cca",
     });
+  });
+
+  it("streams NDJSON tokens when stream is true", async () => {
+    const enc = new TextEncoder();
+    const groqSse = new ReadableStream({
+      start(controller) {
+        controller.enqueue(
+          enc.encode(
+            'data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n'
+          )
+        );
+        controller.enqueue(
+          enc.encode('data: {"choices":[{"delta":{"content":"!"}}]}\n\n')
+        );
+        controller.enqueue(enc.encode("data: [DONE]\n\n"));
+        controller.close();
+      },
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(groqSse, { status: 200 }))
+    );
+
+    const { POST } = await import("@/app/api/chat/route");
+    const req = new NextRequest("http://localhost/api/chat", {
+      method: "POST",
+      headers: { origin: ALLOWED_ORIGIN, "content-type": "application/json" },
+      body: JSON.stringify({
+        message: "Hi",
+        businessId: "232211d5-85e0-413d-8dec-b0c0ec281cca",
+        sessionId: "same-session",
+        stream: true,
+      }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("ndjson");
+
+    const reader = res.body!.getReader();
+    const dec = new TextDecoder();
+    let out = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      out += dec.decode(value);
+    }
+
+    expect(out).toContain('"type":"token"');
+    expect(out).toContain("Hello");
+    expect(out).toContain('"type":"done"');
   });
 });

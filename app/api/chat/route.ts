@@ -23,6 +23,7 @@ const chatRequestSchema = z.object({
   message: z.string().trim().min(1),
   businessId: z.string().uuid(),
   sessionId: z.string().trim().min(1).max(200),
+  stream: z.boolean().optional().default(false),
 });
 
 function isOriginAllowed(origin: string | null): boolean {
@@ -39,6 +40,7 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
     "Access-Control-Allow-Origin": isAllowed ? origin! : ALLOWED_ORIGINS[0],
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
+    "X-Accel-Buffering": "no",
   };
 }
 
@@ -77,7 +79,7 @@ export async function POST(req: NextRequest) {
         { status: 400, headers: corsHeaders }
       );
     }
-    const { message, businessId, sessionId } = parsed.data;
+    const { message, businessId, sessionId, stream } = parsed.data;
 
     const { data: business, error: businessError } = await supabase
       .from("businesses")
@@ -112,6 +114,137 @@ export async function POST(req: NextRequest) {
       { role: "user", content: message },
     ];
 
+    const groqBodyBase = {
+      model: "meta-llama/llama-4-scout-17b-16e-instruct",
+      messages: conversation,
+      max_tokens: 300,
+      temperature: 0.7,
+      top_p: 1,
+    };
+
+    if (stream) {
+      const groqRes = await fetch(
+        "https://api.groq.com/openai/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          },
+          body: JSON.stringify({ ...groqBodyBase, stream: true }),
+        }
+      );
+
+      if (!groqRes.ok || !groqRes.body) {
+        return NextResponse.json(
+          {
+            reply:
+              "We could not reach the assistant right now. Please try again in a moment.",
+          },
+          { status: 502, headers: corsHeaders }
+        );
+      }
+
+      await supabase.from("messages").insert([
+        {
+          session_id: sessionId,
+          business_id: businessId,
+          role: "user",
+          content: message,
+        },
+      ]);
+
+      const encoder = new TextEncoder();
+      const ndjsonStream = new ReadableStream({
+        async start(controller) {
+          let fullReply = "";
+          try {
+            const reader = groqRes.body!.getReader();
+            const dec = new TextDecoder();
+            let carry = "";
+            const processLine = (line: string) => {
+              const trimmed = line.trim();
+              if (!trimmed.startsWith("data:")) return;
+              const payload = trimmed.slice(5).trim();
+              if (payload === "[DONE]") return;
+              try {
+                const j = JSON.parse(payload) as {
+                  choices?: Array<{ delta?: { content?: string } }>;
+                };
+                const piece = j.choices?.[0]?.delta?.content ?? "";
+                if (piece) {
+                  fullReply += piece;
+                  controller.enqueue(
+                    encoder.encode(
+                      JSON.stringify({ type: "token", v: piece }) + "\n"
+                    )
+                  );
+                }
+              } catch {
+                // ignore malformed SSE JSON
+              }
+            };
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              carry += dec.decode(value, { stream: true });
+              const parts = carry.split("\n");
+              carry = parts.pop() ?? "";
+              for (const line of parts) {
+                processLine(line);
+              }
+            }
+            if (carry.trim()) {
+              processLine(carry);
+            }
+
+            const replyTrimmed = fullReply.trim();
+            if (replyTrimmed.length > 0) {
+              await supabase.from("messages").insert([
+                {
+                  session_id: sessionId,
+                  business_id: businessId,
+                  role: "assistant",
+                  content: replyTrimmed,
+                },
+              ]);
+            }
+
+            controller.enqueue(
+              encoder.encode(
+                JSON.stringify({
+                  type: "done",
+                  reply: replyTrimmed || null,
+                }) + "\n"
+              )
+            );
+          } catch {
+            controller.enqueue(
+              encoder.encode(
+                JSON.stringify({
+                  type: "error",
+                  message:
+                    "Something went wrong while loading the reply. Tap Retry to try again.",
+                }) + "\n"
+              )
+            );
+          } finally {
+            controller.close();
+          }
+        },
+      });
+
+      return new Response(ndjsonStream, {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/x-ndjson; charset=utf-8",
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
     const groqRes = await fetch(
       "https://api.groq.com/openai/v1/chat/completions",
       {
@@ -120,14 +253,7 @@ export async function POST(req: NextRequest) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
         },
-        body: JSON.stringify({
-          model: "meta-llama/llama-4-scout-17b-16e-instruct",
-          messages: conversation,
-          max_tokens: 300,
-          temperature: 0.7,
-          top_p: 1,
-          stream: false,
-        }),
+        body: JSON.stringify({ ...groqBodyBase, stream: false }),
       }
     );
 
