@@ -138,7 +138,19 @@ describe("chat route", () => {
 
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response(groqSse, { status: 200 }))
+      vi.fn(async (url: string, opts?: { body?: string }) => {
+        // For non-streaming requests (e.g., from runGroqWithWebSearch), return JSON
+        if (opts?.body && !opts.body.includes('"stream":true')) {
+          return new Response(
+            JSON.stringify({
+              choices: [{ message: { content: "Assistant reply" } }],
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        // For streaming requests, return SSE
+        return new Response(groqSse, { status: 200 });
+      })
     );
 
     const { POST } = await import("@/app/api/chat/route");
