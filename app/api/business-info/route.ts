@@ -58,7 +58,6 @@ export async function POST(req: NextRequest) {
       .select(`
         title,
         welcome_message,
-        system_prompt,
         bubble_icon,
         bubble_color,
         bubble_text_color,
@@ -81,7 +80,6 @@ export async function POST(req: NextRequest) {
       {
         title: data.title || "Chat Assistant",
         welcome_message: data.welcome_message || null,
-        system_prompt: data.system_prompt || "",
 
         bubble_icon: data.bubble_icon || "💬",
         bubble_color: data.bubble_color || "#1C64F2",

@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 type BusinessInfo = {
   title: string;
   welcome_message: string | null;
-  system_prompt: string;
   bubble_icon: string;
   bubble_color: string;
   bubble_text_color: string;
