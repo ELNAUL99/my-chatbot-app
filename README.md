@@ -207,13 +207,9 @@ Include the chat widget on external websites:
 <div id="chatbot-widget"></div>
 ```
 
-## 🤝 Contributing
-
-Contributions are welcome! Feel free to open issues and pull requests to help improve this project.
-
 ## 📄 License
 
-This project is open source and available under the MIT License.
+This project is private project.
 
 ## 💬 Support & Customization
 
