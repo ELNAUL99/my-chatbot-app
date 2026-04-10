@@ -7,19 +7,42 @@ const supabase = createClient(
 );
 
 // --- CORS CONFIG ---
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+// Configure allowed origins via environment variable
+// Format: comma-separated list of URLs
+const getAllowedOrigins = (): string[] => {
+  const envOrigins = process.env.ALLOWED_ORIGINS;
+  if (envOrigins) {
+    return envOrigins.split(",").map(o => o.trim()).filter(Boolean);
+  }
+  return ["https://my-chatbot-app-chi.vercel.app"];
 };
 
+const ALLOWED_ORIGINS = getAllowedOrigins();
+
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  // Check if the origin is allowed
+  const isAllowed = origin && ALLOWED_ORIGINS.includes(origin);
+  
+  // Only return the allowed origin if it matches
+  // Otherwise return the first allowed origin (prevents information leakage)
+  return {
+    "Access-Control-Allow-Origin": isAllowed ? origin! : ALLOWED_ORIGINS[0],
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+  };
+}
+
 // --- Preflight ---
-export function OPTIONS() {
-  return NextResponse.json({}, { status: 200, headers: corsHeaders });
+export function OPTIONS(req: NextRequest) {
+  const origin = req.headers.get("origin");
+  return NextResponse.json({}, { status: 200, headers: getCorsHeaders(origin) });
 }
 
 // --- Main Handler ---
 export async function POST(req: NextRequest) {
+  const origin = req.headers.get("origin");
+  const corsHeaders = getCorsHeaders(origin);
+
   try {
     const { businessId } = await req.json();
 
