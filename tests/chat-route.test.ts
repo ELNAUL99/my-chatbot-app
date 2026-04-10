@@ -120,66 +120,77 @@ describe("chat route", () => {
   });
 
   it("streams NDJSON tokens when stream is true", async () => {
-    const enc = new TextEncoder();
-    const groqSse = new ReadableStream({
-      start(controller) {
-        controller.enqueue(
-          enc.encode(
-            'data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n'
-          )
-        );
-        controller.enqueue(
-          enc.encode('data: {"choices":[{"delta":{"content":"!"}}]}\n\n')
-        );
-        controller.enqueue(enc.encode("data: [DONE]\n\n"));
-        controller.close();
-      },
-    });
+    // Disable web search for this test to ensure we test pure streaming
+    const savedTavilyKey = process.env.TAVILY_API_KEY;
+    delete process.env.TAVILY_API_KEY;
 
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string, opts?: { body?: string }) => {
-        // For non-streaming requests (e.g., from runGroqWithWebSearch), return JSON
-        if (opts?.body && !opts.body.includes('"stream":true')) {
-          return new Response(
-            JSON.stringify({
-              choices: [{ message: { content: "Assistant reply" } }],
-            }),
-            { status: 200, headers: { "content-type": "application/json" } }
+    try {
+      const enc = new TextEncoder();
+      const groqSse = new ReadableStream({
+        start(controller) {
+          controller.enqueue(
+            enc.encode(
+              'data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n'
+            )
           );
-        }
-        // For streaming requests, return SSE
-        return new Response(groqSse, { status: 200 });
-      })
-    );
+          controller.enqueue(
+            enc.encode('data: {"choices":[{"delta":{"content":"!"}}]}\n\n')
+          );
+          controller.enqueue(enc.encode("data: [DONE]\n\n"));
+          controller.close();
+        },
+      });
 
-    const { POST } = await import("@/app/api/chat/route");
-    const req = new NextRequest("http://localhost/api/chat", {
-      method: "POST",
-      headers: { origin: ALLOWED_ORIGIN, "content-type": "application/json" },
-      body: JSON.stringify({
-        message: "Hi",
-        businessId: "232211d5-85e0-413d-8dec-b0c0ec281cca",
-        sessionId: "same-session",
-        stream: true,
-      }),
-    });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string, opts?: { body?: string }) => {
+          // For non-streaming requests (e.g., from runGroqWithWebSearch), return JSON
+          if (opts?.body && !opts.body.includes('"stream":true')) {
+            return new Response(
+              JSON.stringify({
+                choices: [{ message: { content: "Assistant reply" } }],
+              }),
+              { status: 200, headers: { "content-type": "application/json" } }
+            );
+          }
+          // For streaming requests, return SSE
+          return new Response(groqSse, { status: 200 });
+        })
+      );
 
-    const res = await POST(req);
-    expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toContain("ndjson");
+      const { POST } = await import("@/app/api/chat/route");
+      const req = new NextRequest("http://localhost/api/chat", {
+        method: "POST",
+        headers: { origin: ALLOWED_ORIGIN, "content-type": "application/json" },
+        body: JSON.stringify({
+          message: "Hi",
+          businessId: "232211d5-85e0-413d-8dec-b0c0ec281cca",
+          sessionId: "same-session",
+          stream: true,
+        }),
+      });
 
-    const reader = res.body!.getReader();
-    const dec = new TextDecoder();
-    let out = "";
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      out += dec.decode(value);
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("ndjson");
+
+      const reader = res.body!.getReader();
+      const dec = new TextDecoder();
+      let out = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        out += dec.decode(value);
+      }
+
+      expect(out).toContain('"type":"token"');
+      expect(out).toContain("Hello");
+      expect(out).toContain('"type":"done"');
+    } finally {
+      // Restore TAVILY_API_KEY
+      if (savedTavilyKey !== undefined) {
+        process.env.TAVILY_API_KEY = savedTavilyKey;
+      }
     }
-
-    expect(out).toContain('"type":"token"');
-    expect(out).toContain("Hello");
-    expect(out).toContain('"type":"done"');
   });
 });
