@@ -19,6 +19,10 @@ const getAllowedOrigins = (): string[] => {
 
 const ALLOWED_ORIGINS = getAllowedOrigins();
 
+function isOriginAllowed(origin: string | null): boolean {
+  return !origin || ALLOWED_ORIGINS.includes(origin);
+}
+
 function getCorsHeaders(origin: string | null): Record<string, string> {
   // Check if the origin is allowed
   const isAllowed = origin && ALLOWED_ORIGINS.includes(origin);
@@ -35,6 +39,13 @@ function getCorsHeaders(origin: string | null): Record<string, string> {
 // CORS preflight
 export function OPTIONS(req: NextRequest) {
   const origin = req.headers.get("origin");
+  if (!isOriginAllowed(origin)) {
+    return new Response(null, {
+      status: 403,
+      headers: getCorsHeaders(origin),
+    });
+  }
+
   return new Response(null, {
     status: 204,
     headers: getCorsHeaders(origin),
@@ -44,6 +55,13 @@ export function OPTIONS(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const origin = req.headers.get("origin");
   const corsHeaders = getCorsHeaders(origin);
+
+  if (!isOriginAllowed(origin)) {
+    return NextResponse.json(
+      { reply: "Origin not allowed." },
+      { status: 403, headers: corsHeaders }
+    );
+  }
 
   try {
     const { message, businessId, sessionId } = await req.json();
