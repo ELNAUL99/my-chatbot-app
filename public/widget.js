@@ -163,7 +163,7 @@
         hasShownWelcome = true;
       }
 
-    } catch (err) {
+    } catch {
       console.warn("Failed to load business info");
     }
   })();
@@ -199,17 +199,26 @@
   function addMessage(role, text) {
     const messages = document.getElementById("chat-messages");
     const msg = document.createElement("div");
+    const bubble = document.createElement("div");
     msg.style.marginBottom = "12px";
     msg.style.whiteSpace = "pre-wrap";
+    bubble.style.display = "inline-block";
+    bubble.style.padding = "8px 12px";
+    bubble.style.borderRadius = "12px";
+    // Use textContent to avoid injecting HTML from user/model text.
+    bubble.textContent = text;
 
     if (role === "user") {
       msg.style.textAlign = "right";
-      msg.innerHTML = `<div style="display:inline-block;background:${THEME_PRIMARY};color:#fff;padding:8px 12px;border-radius:12px;">${text}</div>`;
+      bubble.style.background = THEME_PRIMARY;
+      bubble.style.color = "#fff";
     } else {
       msg.style.textAlign = "left";
-      msg.innerHTML = `<div style="display:inline-block;background:#f1f1f1;color:#333;padding:8px 12px;border-radius:12px;">${text}</div>`;
+      bubble.style.background = "#f1f1f1";
+      bubble.style.color = "#333";
     }
 
+    msg.appendChild(bubble);
     messages.appendChild(msg);
     messages.scrollTop = messages.scrollHeight;
   }
@@ -238,7 +247,7 @@
 
       const data = await response.json();
       addMessage("assistant", data.reply);
-    } catch (err) {
+    } catch {
       addMessage("assistant", "Something went wrong.");
     }
   }
