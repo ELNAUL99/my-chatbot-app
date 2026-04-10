@@ -6,29 +6,52 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+// --- CORS CONFIG ---
+// Configure allowed origins via environment variable
+// Format: comma-separated list of URLs
+const getAllowedOrigins = (): string[] => {
+  const envOrigins = process.env.ALLOWED_ORIGINS;
+  if (envOrigins) {
+    return envOrigins.split(",").map(o => o.trim()).filter(Boolean);
+  }
+  return ["https://my-chatbot-app-chi.vercel.app"];
+};
+
+const ALLOWED_ORIGINS = getAllowedOrigins();
+
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  // Check if the origin is allowed
+  const isAllowed = origin && ALLOWED_ORIGINS.includes(origin);
+  
+  // Only return the allowed origin if it matches
+  // Otherwise return the first allowed origin (prevents information leakage)
+  return {
+    "Access-Control-Allow-Origin": isAllowed ? origin! : ALLOWED_ORIGINS[0],
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+  };
+}
+
 // CORS preflight
-export function OPTIONS() {
+export function OPTIONS(req: NextRequest) {
+  const origin = req.headers.get("origin");
   return new Response(null, {
     status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-    },
+    headers: getCorsHeaders(origin),
   });
 }
 
 export async function POST(req: NextRequest) {
+  const origin = req.headers.get("origin");
+  const corsHeaders = getCorsHeaders(origin);
+
   try {
     const { message, businessId, sessionId } = await req.json();
 
     if (!message || !businessId || !sessionId) {
       return NextResponse.json(
         { reply: "Missing message, businessId, or sessionId." },
-        {
-          status: 400,
-          headers: { "Access-Control-Allow-Origin": "*" },
-        }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -41,20 +64,14 @@ export async function POST(req: NextRequest) {
     if (businessError || !business) {
       return NextResponse.json(
         { reply: "This business does not exist or has no system prompt." },
-        {
-          status: 404,
-          headers: { "Access-Control-Allow-Origin": "*" },
-        }
+        { status: 404, headers: corsHeaders }
       );
     }
 
     if (!business.is_active) {
       return NextResponse.json(
         { reply: "This chatbot is currently inactive." },
-        {
-          status: 403,
-          headers: { "Access-Control-Allow-Origin": "*" },
-        }
+        { status: 403, headers: corsHeaders }
       );
     }
 
@@ -95,10 +112,7 @@ export async function POST(req: NextRequest) {
     if (!reply) {
       return NextResponse.json(
         { reply: "The AI returned no response." },
-        {
-          status: 500,
-          headers: { "Access-Control-Allow-Origin": "*" },
-        }
+        { status: 500, headers: corsHeaders }
       );
     }
 
@@ -119,18 +133,12 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(
       { reply },
-      {
-        status: 200,
-        headers: { "Access-Control-Allow-Origin": "*" },
-      }
+      { status: 200, headers: corsHeaders }
     );
   } catch (_error) {
     return NextResponse.json(
       { reply: "Server error." },
-      {
-        status: 500,
-        headers: { "Access-Control-Allow-Origin": "*" },
-      }
+      { status: 500, headers: corsHeaders }
     );
   }
 }
