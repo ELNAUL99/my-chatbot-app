@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { runGroqWithWebSearch } from "@/lib/groq-agent";
+import { isWebSearchConfigured } from "@/lib/web-search";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -60,6 +62,63 @@ export function OPTIONS(req: NextRequest) {
   });
 }
 
+const CHAT_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
+const MAX_TOKENS = 300;
+const MAX_TOKENS_WITH_SEARCH = 768;
+
+function ndjsonTextStreamResponse(
+  fullReply: string,
+  corsHeaders: Record<string, string>,
+  persistAssistant: () => Promise<void>
+): Response {
+  const encoder = new TextEncoder();
+  const chunkSize = 32;
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        const t = fullReply.trim();
+        if (!t) {
+          controller.enqueue(
+            encoder.encode(JSON.stringify({ type: "done", reply: null }) + "\n")
+          );
+          return;
+        }
+        for (let i = 0; i < t.length; i += chunkSize) {
+          const part = t.slice(i, i + chunkSize);
+          controller.enqueue(
+            encoder.encode(JSON.stringify({ type: "token", v: part }) + "\n")
+          );
+        }
+        await persistAssistant();
+        controller.enqueue(
+          encoder.encode(JSON.stringify({ type: "done", reply: t }) + "\n")
+        );
+      } catch {
+        controller.enqueue(
+          encoder.encode(
+            JSON.stringify({
+              type: "error",
+              message:
+                "Something went wrong while loading the reply. Tap Retry to try again.",
+            }) + "\n"
+          )
+        );
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
 export async function POST(req: NextRequest) {
   const origin = req.headers.get("origin");
   const corsHeaders = getCorsHeaders(origin);
@@ -114,22 +173,55 @@ export async function POST(req: NextRequest) {
       { role: "user", content: message },
     ];
 
+    const groqKey = process.env.GROQ_API_KEY;
+    const useWebSearch = isWebSearchConfigured() && Boolean(groqKey);
+
     const groqBodyBase = {
-      model: "meta-llama/llama-4-scout-17b-16e-instruct",
+      model: CHAT_MODEL,
       messages: conversation,
-      max_tokens: 300,
+      max_tokens: MAX_TOKENS,
       temperature: 0.7,
       top_p: 1,
     };
 
     if (stream) {
+      await supabase.from("messages").insert([
+        {
+          session_id: sessionId,
+          business_id: businessId,
+          role: "user",
+          content: message,
+        },
+      ]);
+
+      if (useWebSearch) {
+        const agentReply = await runGroqWithWebSearch(conversation, {
+          model: CHAT_MODEL,
+          apiKey: groqKey!,
+          maxTokens: MAX_TOKENS_WITH_SEARCH,
+        });
+
+        if (agentReply) {
+          return ndjsonTextStreamResponse(agentReply, corsHeaders, async () => {
+            await supabase.from("messages").insert([
+              {
+                session_id: sessionId,
+                business_id: businessId,
+                role: "assistant",
+                content: agentReply.trim(),
+              },
+            ]);
+          });
+        }
+      }
+
       const groqRes = await fetch(
         "https://api.groq.com/openai/v1/chat/completions",
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+            Authorization: `Bearer ${groqKey}`,
           },
           body: JSON.stringify({ ...groqBodyBase, stream: true }),
         }
@@ -144,15 +236,6 @@ export async function POST(req: NextRequest) {
           { status: 502, headers: corsHeaders }
         );
       }
-
-      await supabase.from("messages").insert([
-        {
-          session_id: sessionId,
-          business_id: businessId,
-          role: "user",
-          content: message,
-        },
-      ]);
 
       const encoder = new TextEncoder();
       const ndjsonStream = new ReadableStream({
@@ -245,13 +328,43 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    if (useWebSearch) {
+      const agentReply = await runGroqWithWebSearch(conversation, {
+        model: CHAT_MODEL,
+        apiKey: groqKey!,
+        maxTokens: MAX_TOKENS_WITH_SEARCH,
+      });
+
+      if (agentReply) {
+        await supabase.from("messages").insert([
+          {
+            session_id: sessionId,
+            business_id: businessId,
+            role: "user",
+            content: message,
+          },
+          {
+            session_id: sessionId,
+            business_id: businessId,
+            role: "assistant",
+            content: agentReply.trim(),
+          },
+        ]);
+
+        return NextResponse.json(
+          { reply: agentReply.trim() },
+          { status: 200, headers: corsHeaders }
+        );
+      }
+    }
+
     const groqRes = await fetch(
       "https://api.groq.com/openai/v1/chat/completions",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          Authorization: `Bearer ${groqKey}`,
         },
         body: JSON.stringify({ ...groqBodyBase, stream: false }),
       }
