@@ -1,231 +1,198 @@
 # AI Chatbot for Local Businesses
 
-A modern, intelligent chatbot application built for small local businesses. The chatbot uses AI-powered conversations, web search capabilities, and business integration features to provide exceptional customer service.
+[![CI](https://github.com/ELNAUL99/my-chatbot-app/actions/workflows/ci.yml/badge.svg)](https://github.com/ELNAUL99/my-chatbot-app/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/ELNAUL99/my-chatbot-app/actions/workflows/codeql.yml/badge.svg)](https://github.com/ELNAUL99/my-chatbot-app/actions/workflows/codeql.yml)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)](https://nextjs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![License: Proprietary](https://img.shields.io/badge/license-proprietary-lightgrey)](#license)
 
-**[Live Demo](https://my-chatbot-app-chi.vercel.app)** | *Looking to integrate this for your business? Let's customize it for your needs!*
+A production-ready conversational AI widget for small local businesses. It answers customer questions with a grounded LLM, pulls live information from the web, looks up business data from Supabase, and can book events directly into Google Calendar — all embeddable on any website with a single `<script>` tag.
 
-## 🎯 Features
+**Live demo:** [my-chatbot-app-chi.vercel.app](https://my-chatbot-app-chi.vercel.app)
 
-- **AI-Powered Conversations** - Intelligent chat responses using Groq API
-- **Web Search Integration** - Real-time web search capability for current information
-- **Business Integration** - Retrieve and display business information dynamically
-- **Calendar Integration** - Add events to Google Calendar directly from chat
-- **Fully Typed** - Built with TypeScript for developer confidence
-- **Modern UI** - Responsive design with Tailwind CSS
-- **Tested** - Comprehensive test suite with Vitest
-- **Production Ready** - Deployed on Vercel with optimized performance
+---
 
-## 🛠️ Tech Stack
+## Highlights
 
-- **Framework**: [Next.js 15](https://nextjs.org) with Turbopack
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS
-- **AI/ML**: [Groq API](https://groq.com) for LLM inference
-- **Data**: [Supabase](https://supabase.com) for backend storage
-- **APIs**: Google Calendar & Search integrations
-- **Testing**: [Vitest](https://vitest.dev)
-- **Linting**: ESLint with Husky pre-commit hooks
-- **Deployment**: Vercel
+- **Grounded LLM responses.** Groq-hosted inference with a retrieval pipeline that combines business data (Supabase) and live web search (Tavily) to cut hallucinations.
+- **Embeddable widget.** Single-script install on any external site — no SDK integration required.
+- **Actionable conversations.** Chatbot can create Google Calendar events via a service account, not just answer questions.
+- **End-to-end typed.** Strict TypeScript across routes, tests, and shared libraries.
+- **Quality gates.** Parallel CI jobs for lint, typecheck, test, and build; CodeQL security scan on every PR; Husky pre-commit hooks.
+- **Origin-locked API.** Per-route CORS allowlist (`ALLOWED_ORIGINS`) protects the chat and calendar endpoints against cross-site abuse.
 
-## 📋 Prerequisites
+## Tech Stack
 
-Before getting started, ensure you have:
+| Layer | Choice |
+| --- | --- |
+| Framework | Next.js 15 (App Router, Turbopack) |
+| Language | TypeScript (strict) |
+| UI | React 19, Tailwind CSS v4 |
+| LLM | Groq API |
+| Search | Tavily API |
+| Data | Supabase (Postgres + REST) |
+| Integrations | Google Calendar (service account) |
+| Testing | Vitest, happy-dom, jsdom |
+| Tooling | ESLint 9, Husky, lint-staged |
+| CI/CD | GitHub Actions + CodeQL, Vercel |
 
-- Node.js 20+ and npm installed
-- A [Groq API key](https://console.groq.com)
-- A [Supabase project](https://supabase.com) with API credentials
-- (Optional) [Google API credentials](https://developers.google.com/calendar) for calendar integration
-- (Optional) A Vercel account for deployment
+## Architecture
 
-## 🚀 Getting Started
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/yourusername/my-chatbot-app.git
-cd my-chatbot-app
+```
+ ┌────────────┐   embed    ┌──────────────────┐    REST    ┌────────────────┐
+ │  Customer  │──────────▶│  widget.js       │──────────▶│  Next.js API   │
+ │  browser   │◀──────────│  (public/)       │◀──────────│  (/app/api/*)  │
+ └────────────┘           └──────────────────┘            └───────┬────────┘
+                                                                  │
+                     ┌────────────────────────┬───────────────────┼───────────────────┐
+                     ▼                        ▼                   ▼                   ▼
+               Groq LLM                 Tavily web           Supabase             Google
+               (reasoning)              (fresh facts)        (business data)      Calendar
 ```
 
-### 2. Install Dependencies
+- `/api/chat` orchestrates the conversation: loads business context, retrieves history, optionally queries the web, then calls Groq.
+- `/api/business-info` exposes business metadata used by the widget to render branded UI.
+- `/api/add-to-calendar` writes events to a Google Calendar via a service account, with origin checks and input validation.
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 20+ (CI runs on Node 24)
+- Groq API key ([console.groq.com](https://console.groq.com))
+- Supabase project URL and anon key
+- *(Optional)* Tavily API key for web search
+- *(Optional)* Google service account for Calendar integration
+
+### Install
 
 ```bash
+git clone https://github.com/ELNAUL99/my-chatbot-app.git
+cd my-chatbot-app
 npm install
 ```
 
-### 3. Configure Environment Variables
+### Configure
 
-Create a `.env.local` file in the root directory:
+Create `.env.local` in the project root:
 
 ```env
-# Groq API
-NEXT_PUBLIC_GROQ_API_KEY=your_groq_api_key_here
+# LLM
+GROQ_API_KEY=
 
 # Supabase
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
 
-# Google APIs (optional)
-GOOGLE_CLIENT_ID=your_google_client_id
-GOOGLE_CLIENT_SECRET=your_google_client_secret
-GOOGLE_CALENDAR_API_KEY=your_google_calendar_api_key
+# Web search (optional)
+TAVILY_API_KEY=
 
-# Business Configuration
-NEXT_PUBLIC_BUSINESS_NAME=Your Business Name
-NEXT_PUBLIC_BUSINESS_EMAIL=contact@yourbusiness.com
+# CORS allowlist (comma-separated origins)
+ALLOWED_ORIGINS=https://yourdomain.com
+
+# Google Calendar (optional)
+GOOGLE_SERVICE_ACCOUNT_EMAIL=
+GOOGLE_PRIVATE_KEY=
+CALENDAR_PIZZA=   # target calendar ID
 ```
 
-### 4. Run Development Server
+### Run
 
 ```bash
-npm run dev
+npm run dev    # Next.js dev server at http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser to see the application. The page will auto-update as you make changes.
+## Scripts
 
-## 📦 Project Structure
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Start the dev server with Turbopack |
+| `npm run build` | Production build |
+| `npm start` | Serve the production build |
+| `npm run lint` | ESLint across the project |
+| `npm run typecheck` | TypeScript project-wide check (`tsc --noEmit`) |
+| `npm test` | Run the Vitest suite once |
+| `npm run test:watch` | Vitest in watch mode |
+
+## Project Structure
 
 ```
-├── app/                          # Next.js app directory
-│   ├── api/                      # API routes
-│   │   ├── add-to-calendar/      # Google Calendar integration
-│   │   ├── business-info/        # Business information endpoint
-│   │   └── chat/                 # Main chat API endpoint
-│   ├── layout.tsx                # Root layout
-│   ├── page.tsx                  # Home page
-│   └── globals.css               # Global styles
-├── components/                   # React components
-│   └── ChatPreview.tsx           # Chat UI component
-├── lib/                          # Utility functions & API clients
-│   ├── groq-agent.ts             # Groq API integration
-│   └── web-search.ts             # Web search functionality
-├── public/                       # Static assets
-│   └── widget.js                 # Embeddable chat widget
-├── tests/                        # Test files
-│   ├── business-info-route.test.ts
-│   ├── chat-route.test.ts
-│   ├── web-search.test.ts
-│   └── widget-behavior.test.ts
-└── package.json                  # Dependencies & scripts
+app/
+  api/
+    add-to-calendar/   # Google Calendar write endpoint
+    business-info/     # Business metadata endpoint
+    chat/              # Main chat + retrieval orchestration
+  layout.tsx
+  page.tsx
+components/
+  ChatPreview.tsx      # Admin-facing preview of the widget
+lib/
+  groq-agent.ts        # LLM client + prompt assembly
+  web-search.ts        # Tavily wrapper with feature flag
+public/
+  widget.js            # Embeddable chat widget
+tests/                 # Vitest suite covering routes, widget, and search
+.github/workflows/
+  ci.yml               # Parallel lint / typecheck / test / build
+  codeql.yml           # Static security analysis
 ```
 
-## 🧪 Testing
+## Testing
 
-Run the test suite:
+The suite covers API route behavior, CORS enforcement, widget rendering, and the web-search adapter.
 
 ```bash
-# Run tests once
 npm test
-
-# Watch mode for development
-npm run test:watch
 ```
 
-## 📝 Linting & Code Quality
+All four workflows (lint, typecheck, test, build) run in parallel on every push and pull request — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
-Check and fix code style:
+## CI/CD
 
-```bash
-# Check for issues
-npm run lint
+Every change goes through the following automated gates:
 
-# Auto-fix issues
-npm run lint -- --fix
-```
+1. **Local pre-commit** — Husky + lint-staged run ESLint on staged files before a commit lands.
+2. **Continuous integration** — GitHub Actions runs lint, typecheck, test, and build as four parallel jobs on Node 24.
+3. **Security scanning** — GitHub CodeQL (`security-and-quality` query suite) analyzes every PR and runs on a weekly schedule.
+4. **Continuous deployment** — Vercel builds and deploys previews for each branch and promotes `main` to production automatically.
 
-Pre-commit hooks are automatically set up via Husky to run linting on staged files.
+## API Reference
 
-## 🏗️ Building for Production
+### `POST /api/chat`
 
-Create an optimized production build:
+Send a user message and receive an AI response. Requires the calling origin to be in `ALLOWED_ORIGINS`.
 
-```bash
-npm run build
-```
-
-Start the production server:
-
-```bash
-npm start
-```
-
-## 🚀 Deployment
-
-### Deploy to Vercel (Recommended)
-
-The simplest way to deploy is to use the [Vercel Platform](https://vercel.com).
-
-1. Push your code to GitHub
-2. Import your repository on Vercel
-3. Add your environment variables in the Vercel dashboard
-4. Deploy with one click!
-
-Check the [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
-
-## 🔌 API Endpoints
-
-### POST `/api/chat`
-Send a message to the chatbot and receive an AI-powered response.
-
-**Request:**
 ```json
 {
-  "message": "What are your business hours?",
-  "conversationHistory": []
+  "message": "What time do you close on Saturday?",
+  "conversationId": "uuid-optional"
 }
 ```
 
-**Response:**
-```json
-{
-  "response": "We're open Monday to Friday, 9 AM to 6 PM...",
-  "sources": ["web_search", "business_info"]
-}
-```
+### `GET /api/business-info`
 
-### GET `/api/business-info`
-Retrieve business information.
+Returns branded widget metadata (title, colors, welcome message).
 
-### POST `/api/add-to-calendar`
-Add an event to Google Calendar.
+### `POST /api/add-to-calendar`
 
-## 🛠️ Customization
+Creates a Google Calendar event via the configured service account. Validates the payload with Zod before writing.
 
-### Connect to Groq LLM
-
-Edit [lib/groq-agent.ts](lib/groq-agent.ts) to customize AI behavior and system prompts.
-
-### Modify Business Info
-
-Update [app/api/business-info/route.ts](app/api/business-info/route.ts) to return your business details.
-
-### Embed the Chat Widget
-
-Include the chat widget on external websites:
+## Embedding the Widget
 
 ```html
-<script src="https://my-chatbot-app-chi.vercel.app/widget.js"></script>
+<script src="https://my-chatbot-app-chi.vercel.app/widget.js" defer></script>
 <div id="chatbot-widget"></div>
 ```
 
-## 📄 License
+The widget pulls its branding from `/api/business-info`, so the same script serves different businesses from different origins.
 
-This project is private project.
+## Security Notes
 
-## 💬 Support & Customization
+- All mutating endpoints enforce an origin allowlist.
+- Secrets are never exposed to the client; only `NEXT_PUBLIC_SUPABASE_*` keys (which are designed to be public) reach the browser.
+- Supabase row-level security is expected to be enabled on any table the anon key can reach.
+- CodeQL runs `security-and-quality` queries on every PR.
 
-Are you a local business looking to integrate this chatbot? I'd be happy to customize it for your specific needs, including:
+## License
 
-- Custom AI training on your business data
-- Integration with your existing systems
-- Branded UI/UX
-- Multi-language support
-- Analytics and insights
-
-Feel free to reach out to discuss your requirements!
-
-## 📚 Additional Resources
-
-- [Next.js Documentation](https://nextjs.org/docs)
-- [Groq API Documentation](https://console.groq.com/docs)
-- [Supabase Documentation](https://supabase.com/docs)
-- [Tailwind CSS Documentation](https://tailwindcss.com/docs)
+Proprietary. All rights reserved. Contact the author for licensing or customization inquiries.
