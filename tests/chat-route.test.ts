@@ -15,7 +15,8 @@ const state = {
 const supabaseClientMock = {
   from: vi.fn((table: string) => {
     if (table === "businesses") {
-      const chain = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const chain: any = {
         select: vi.fn(() => chain),
         eq: vi.fn(() => chain),
         single: vi.fn(async () => ({
@@ -27,7 +28,8 @@ const supabaseClientMock = {
     }
 
     if (table === "messages") {
-      const chain = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const chain: any = {
         select: vi.fn(() => chain),
         eq: vi.fn((column: string, value: string) => {
           state.messagesEqCalls.push({ column, value });

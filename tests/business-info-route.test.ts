@@ -9,7 +9,8 @@ process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
 
 const supabaseClientMock = {
   from: vi.fn(() => {
-    const chain = {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const chain: any = {
       select: vi.fn(() => chain),
       eq: vi.fn(() => chain),
       single: vi.fn(async () => ({
